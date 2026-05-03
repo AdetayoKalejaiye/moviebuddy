@@ -1,6 +1,6 @@
 flask>=2.0
 requests>=2.0
 python-dotenv>=1.0
-adlib-client>=1.0
+adlib-client
 gunicorn
 openai>=1.0
