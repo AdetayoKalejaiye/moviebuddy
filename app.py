@@ -1,35 +1,48 @@
 from flask import Flask, render_template, request
 import os
-import requests
 from dotenv import load_dotenv
+from adlib_client import AdLib
+import openai
 
 # load environment variables from .env in project root
 load_dotenv()
 
 app = Flask(__name__)
 
-ANTHROPIC_API_URL = "https://api.anthropic.com/v1/complete"
-MODEL = "claude-sonnet"
+MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
+
+# Initialize AdLib for ad monetization
+try:
+    adlib = AdLib()
+except Exception as e:
+    print(f"Warning: AdLib not initialized: {e}")
+    adlib = None
 
 
-def call_claude(prompt: str, max_tokens: int = 400, temperature: float = 0.7) -> str:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+def call_openai(prompt: str, max_tokens: int = 400, temperature: float = 0.7) -> str:
+    api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
-        raise RuntimeError("Missing ANTHROPIC_API_KEY environment variable")
+        raise RuntimeError("Missing OPENAI_API_KEY environment variable")
 
-    headers = {"x-api-key": api_key, "Content-Type": "application/json"}
-    payload = {
-        "model": MODEL,
-        "prompt": prompt,
-        "max_tokens_to_sample": max_tokens,
-        "temperature": temperature,
-        "stop_sequences": ["\n\nHuman:"]
-    }
+    base_url = os.environ.get("OPENAI_BASE_URL")
+    openai.api_key = api_key
+    if base_url:
+        openai.api_base = base_url
 
-    resp = requests.post(ANTHROPIC_API_URL, headers=headers, json=payload, timeout=20)
-    resp.raise_for_status()
-    data = resp.json()
-    return data.get("completion", "")
+    messages = [{"role": "user", "content": prompt}]
+
+    resp = openai.ChatCompletion.create(
+        model=MODEL,
+        messages=messages,
+        max_tokens=max_tokens,
+        temperature=temperature,
+    )
+
+    # Extract assistant content
+    if resp and getattr(resp, "choices", None):
+        return resp.choices[0].message.get("content", "").strip()
+    # Fallback
+    return ""
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -37,6 +50,8 @@ def index():
     user_msg = ""
     assistant_msg = ""
 
+    ad_data = {}
+    
     if request.method == "POST":
         user_msg = request.form.get("message", "").strip()
         if user_msg:
@@ -47,11 +62,21 @@ def index():
                 "\n\nHuman: " + user_msg + "\n\nAssistant:"
             )
             try:
-                assistant_msg = call_claude(system_prompt)
+                assistant_msg = call_openai(system_prompt)
+                
+                # Monetize with AdLib
+                if adlib:
+                    try:
+                        ad_response = adlib.adify_full(assistant_msg)
+                        assistant_msg = ad_response.get("adified", assistant_msg)
+                        ad_data = ad_response.get("ad", {})
+                    except Exception as e:
+                        print(f"AdLib error: {e}")
+                        
             except Exception as e:
-                assistant_msg = f"Error contacting the Claude API: {e}"
+                assistant_msg = f"Error contacting the OpenAI API: {e}"
 
-    return render_template("index.html", user_msg=user_msg, assistant_msg=assistant_msg)
+    return render_template("index.html", user_msg=user_msg, assistant_msg=assistant_msg, ad=ad_data)
 
 
 if __name__ == "__main__":
