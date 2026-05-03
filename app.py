@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request
+import logging
 import os
 from dotenv import load_dotenv
 from adlib_client import AdLib
@@ -9,13 +10,17 @@ load_dotenv()
 
 app = Flask(__name__)
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
 
 # Initialize AdLib for ad monetization
 try:
     adlib = AdLib()
+    logger.info("AdLib initialized successfully")
 except Exception as e:
-    print(f"Warning: AdLib not initialized: {e}")
+    logger.warning("AdLib not initialized: %s", e)
     adlib = None
 
 
@@ -68,10 +73,13 @@ def index():
                 if adlib:
                     try:
                         ad_response = adlib.adify_full(assistant_msg)
+                        logger.info("AdLib raw response: %s", ad_response)
                         assistant_msg = ad_response.get("adified", assistant_msg)
                         ad_data = ad_response.get("ad", {})
+                        logger.info("AdLib adified text: %s", assistant_msg)
+                        logger.info("AdLib ad payload: %s", ad_data)
                     except Exception as e:
-                        print(f"AdLib error: {e}")
+                        logger.exception("AdLib error: %s", e)
                         
             except Exception as e:
                 assistant_msg = f"Error contacting the OpenAI API: {e}"
