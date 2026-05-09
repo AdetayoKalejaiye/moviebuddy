@@ -225,17 +225,16 @@
       </header>
 
       <section class="chat">
-        {% if user_msg %}
-        <article class="bubble user">
-          <strong>You</strong>
-          <div class="bubble-body">{{ user_msg }}</div>
-        </article>
-        {% endif %}
-
         {% if assistant_msg %}
         <article class="bubble assistant">
           <strong>MovieBuddy</strong>
-          <div class="bubble-body">{{ assistant_msg }}</div>
+          <div class="bubble-body">
+            {% if assistant_msg_html %}
+            {{ assistant_msg_html|safe }}
+            {% else %}
+            {{ assistant_msg }}
+            {% endif %}
+          </div>
         </article>
         {% else %}
         <article class="bubble assistant">
@@ -245,14 +244,23 @@
         {% endif %}
       </section>
 
-      <form class="composer" method="post">
+      <form class="composer" method="post" autocomplete="off">
         <label for="message">What are we watching today?</label>
-        <textarea id="message" name="message" placeholder="Example: I want a fast-paced sci-fi thriller with a strong ending.">{{ user_msg }}</textarea>
+        <textarea id="message" name="message" placeholder="Example: I want a fast-paced sci-fi thriller with a strong ending." autocomplete="off"></textarea>
         <div class="actions">
           <span class="hint">Tip: ask for "3 cozy picks" or "something like Interstellar".</span>
           <button type="submit">Ask MovieBuddy</button>
         </div>
       </form>
+
+      <script>
+        window.addEventListener("pageshow", function () {
+          const message = document.getElementById("message");
+          if (message) {
+            message.value = "";
+          }
+        });
+      </script>
     </main>
 
     {% if assistant_msg and assistant_msg.startswith('Error contacting the Claude API:') %}
